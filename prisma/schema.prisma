@@ -1,0 +1,195 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth Models
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  hashedPassword String?
+  role          String    @default("MERCHANT") // MERCHANT or CUSTOMER
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  stores        Store[]   @relation("StoreToUser")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Commerce Models
+
+model Store {
+  id          String      @id @default(uuid())
+  name        String
+  domain      String?     @unique
+  currency    String      @default("USD")
+  country     String      @default("US")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  userId      String
+  user        User        @relation("StoreToUser", fields: [userId], references: [id])
+
+  products    Product[]   @relation("StoreToProduct")
+  categories  Category[]  @relation("StoreToCategory")
+  orders      Order[]     @relation("StoreToOrder")
+  customers   Customer[]  @relation("StoreToCustomer")
+  discounts   Discount[]  @relation("StoreToDiscount")
+  billboards  Billboard[] @relation("StoreToBillboard")
+}
+
+model Billboard {
+  id          String   @id @default(uuid())
+  storeId     String
+  store       Store    @relation("StoreToBillboard", fields: [storeId], references: [id])
+  label       String
+  imageUrl    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categories  Category[]
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  storeId     String
+  store       Store     @relation("StoreToCategory", fields: [storeId], references: [id])
+  billboardId String?
+  billboard   Billboard? @relation(fields: [billboardId], references: [id])
+  name        String
+  slug        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[] @relation("CategoryToProduct")
+}
+
+model Product {
+  id          String    @id @default(uuid())
+  storeId     String
+  store       Store     @relation("StoreToProduct", fields: [storeId], references: [id])
+  categoryId  String
+  category    Category  @relation("CategoryToProduct", fields: [categoryId], references: [id])
+  name        String
+  description String?
+  price       Float
+  isFeatured  Boolean   @default(false)
+  isArchived  Boolean   @default(false)
+  inventory   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  images      Image[]   @relation("ProductToImage")
+  orderItems  OrderItem[]
+}
+
+model Image {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation("ProductToImage", fields: [productId], references: [id], onDelete: Cascade)
+  url         String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Customer {
+  id          String   @id @default(uuid())
+  storeId     String
+  store       Store    @relation("StoreToCustomer", fields: [storeId], references: [id])
+  email       String
+  name        String?
+  phone       String?
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+}
+
+model Order {
+  id          String    @id @default(uuid())
+  storeId     String
+  store       Store     @relation("StoreToOrder", fields: [storeId], references: [id])
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  isPaid      Boolean   @default(false)
+  status      String    @default("PENDING") // PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+  phone       String    @default("")
+  address     String    @default("")
+  totalAmount Float     @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  orderItems  OrderItem[]
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  quantity    Int      @default(1)
+  price       Float
+}
+
+model Discount {
+  id          String   @id @default(uuid())
+  storeId     String
+  store       Store    @relation("StoreToDiscount", fields: [storeId], references: [id])
+  code        String
+  type        String   // PERCENTAGE, FIXED
+  value       Float
+  startDate   DateTime
+  endDate     DateTime?
+  usageLimit  Int?
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
